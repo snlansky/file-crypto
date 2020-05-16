@@ -8,6 +8,9 @@ use file_crypto::*;
 
 extern crate clap;
 use clap::{App, Arg};
+use std::path::PathBuf;
+use std::fs::read_dir;
+
 fn main() {
      let matches = App::new("File Crypto")
           .version("0.2.0")
@@ -36,12 +39,13 @@ fn main() {
      let path = matches.value_of("FILE").unwrap();
      let encrypt_mode = (matches.is_present("encrypt") as u8) << 1;
      let decrypt_mode = matches.is_present("decrypt") as u8;
-     let meta = match encrypt_mode | decrypt_mode {
-          0b01 => CipherCtrl::init_with_type(path, ProcessType::Decrypt),
-          0b10 => CipherCtrl::init_with_type(path, ProcessType::Encrypt),
-          0b11 => panic!("Cannot set encrypt-mode and decrypt-mode at the same time"),
-          _ => CipherCtrl::init(path),
-     };
+
+     // let meta = match encrypt_mode | decrypt_mode {
+     //      0b01 => CipherCtrl::init_with_type(path, ProcessType::Decrypt),
+     //      0b10 => CipherCtrl::init_with_type(path, ProcessType::Encrypt),
+     //      0b11 => panic!("Cannot set encrypt-mode and decrypt-mode at the same time"),
+     //      _ => CipherCtrl::init(path),
+     // };
 
      let key = match matches.value_of("key") {
           Some(s) => {
@@ -56,8 +60,43 @@ fn main() {
                k
           }
      };
+     // match meta.proc_type {
+     //      ProcessType::Encrypt => println!("The encrypted file is at: {}", encrypt(&key, &meta)),
+     //      ProcessType::Decrypt => println!("The decrypted file is at {}", decrypt(&key, &meta)),
+     // };
+    worker_dir(path, key ,encrypt_mode ,decrypt_mode, false).unwrap();
+}
+
+
+fn worker_dir(path: impl Into<PathBuf>, key: Key, encrypt_mode: u8, decrypt_mode: u8, del: bool) -> Result<(), String> {
+     let path = path.into();
+
+     if path.is_dir() {
+          let paths = read_dir(&path).unwrap();
+          for path in paths {
+               let p = format!("{}", path.unwrap().path().display());
+               worker_dir(p, key, encrypt_mode, decrypt_mode, del)?;
+          }
+     } else {
+          worker_file(path, key ,encrypt_mode ,decrypt_mode, del)?;
+     }
+     Ok(())
+}
+
+fn worker_file(path: impl Into<PathBuf>, key: Key, encrypt_mode: u8, decrypt_mode: u8, del: bool) -> Result<(), String> {
+     let path = path.into();
+     println!("file : {:?}, {:?}", path.display(), path.file_name());
+     let path = path.to_str().unwrap();
+
+     let meta = match encrypt_mode | decrypt_mode {
+          0b01 => CipherCtrl::init_with_type(path, ProcessType::Decrypt),
+          0b10 => CipherCtrl::init_with_type(path, ProcessType::Encrypt),
+          0b11 => panic!("Cannot set encrypt-mode and decrypt-mode at the same time"),
+          _ => CipherCtrl::init(path),
+     };
      match meta.proc_type {
           ProcessType::Encrypt => println!("The encrypted file is at: {}", encrypt(&key, &meta)),
           ProcessType::Decrypt => println!("The decrypted file is at {}", decrypt(&key, &meta)),
      };
+     Ok(())
 }
